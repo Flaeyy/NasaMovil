@@ -1,5 +1,7 @@
-// lib/api.ts
-const BASE_URL = 'https://jsonplaceholder.typicode.com';
+// lib/api.ts - lightweight helpers for demo endpoints
+import { API_BASE } from '../config'
+
+const BASE_URL = API_BASE
 
 export async function getPosts() {
   const res = await fetch(`${BASE_URL}/posts?_limit=20`);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform, Alert } from 'react-native'
 import { useNavigation, useRoute } from '@react-navigation/native'
+import { useRouter } from 'expo-router'
 import { useWeatherResults } from '../_contexts/WeatherResultsContext'
 import { getCoordinates, getLocationName, PostWeatherForecast, createWeatherForecastRequest, exportToCSV, exportToJSON } from '../services/nasaServices'
 import type { WeatherForecastAPIResponse } from '../interfaces/in/Iresponse.API'
@@ -30,6 +31,7 @@ try {
 
 export default function ConsultaScreen() {
   const navigation = useNavigation()
+  const router = useRouter()
   const { addResult } = useWeatherResults()
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export default function ConsultaScreen() {
 
   const [destino, setDestino] = useState('')
   const [activity, setActivity] = useState('')
+  const [targetDate, setTargetDate] = useState(new Date().toISOString().split('T')[0])
   const [conditions, setConditions] = useState<Array<any>>([])
   const [loading, setLoading] = useState(false)
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null)
@@ -68,6 +71,128 @@ export default function ConsultaScreen() {
     }
   }
 
+  // Try multiple strategies to get device location. Tries expo-location if available,
+  // falls back to @react-native-community/geolocation or navigator.geolocation.
+  const getDeviceLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
+    // try expo-location
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const Location = require('expo-location')
+      if (Location && (Location.requestForegroundPermissionsAsync || Location.getForegroundPermissionsAsync)) {
+        // prefer checking current status before requesting to detect "denied" state
+        let statusRes: any = { status: 'undetermined' }
+        try {
+          if (Location.getForegroundPermissionsAsync) statusRes = await Location.getForegroundPermissionsAsync()
+        } catch {}
+
+        if (!statusRes || statusRes.status !== 'granted') {
+          // request if not granted
+          try {
+            const req = await Location.requestForegroundPermissionsAsync()
+            statusRes = req
+          } catch (e) {
+            console.warn('expo-location request permission failed', e)
+          }
+        }
+
+        console.log('expo-location permission status:', statusRes)
+
+        // If permission not granted, inform the user with actionable buttons
+        if (!statusRes || statusRes.status !== 'granted') {
+          const state = statusRes?.status || 'unknown'
+          Alert.alert(
+            'Permiso de ubicación',
+            `Estado del permiso: ${state}. ¿Deseas solicitar permiso ahora o abrir Ajustes?`,
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Pedir permiso', onPress: async () => {
+                try {
+                  const r = await Location.requestForegroundPermissionsAsync()
+                  console.log('Permission requested result:', r)
+                  if (r.status === 'granted') {
+                    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest })
+                    if (pos && pos.coords) {
+                      setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude })
+                    }
+                  }
+                } catch (e) {
+                  console.warn('requestForegroundPermissionsAsync failed', e)
+                }
+              }},
+              { text: 'Abrir Ajustes', onPress: () => {
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-var-requires
+                  const { Linking } = require('react-native')
+                  Linking.openSettings()
+                } catch (e) {
+                  console.warn('openSettings failed', e)
+                }
+              }}
+            ]
+          )
+          return null
+        }
+
+        if (statusRes && statusRes.status === 'granted') {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest })
+          if (pos && pos.coords) {
+            console.log('Location obtained via expo-location')
+            return { latitude: pos.coords.latitude, longitude: pos.coords.longitude }
+          }
+        }
+      }
+    } catch (e) {
+      // ignore and fallback
+      console.warn('expo-location unavailable', e)
+    }
+
+    // try @react-native-community/geolocation
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const geo = require('@react-native-community/geolocation')
+      if (geo && geo.getCurrentPosition) {
+        return await new Promise((resolve) => {
+          geo.getCurrentPosition(
+            (pos: any) => {
+              console.log('Location obtained via @react-native-community/geolocation')
+              resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
+            },
+            (err: any) => {
+              console.warn('geolocation error', err)
+              resolve(null)
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+          )
+        })
+      }
+    } catch (e) {
+      console.warn('@react-native-community/geolocation unavailable', e)
+    }
+
+    // fallback: navigator.geolocation (older RN)
+    try {
+      // @ts-ignore
+      if (navigator && navigator.geolocation && navigator.geolocation.getCurrentPosition) {
+        return await new Promise((resolve) => {
+          // @ts-ignore
+          navigator.geolocation.getCurrentPosition(
+            (pos: any) => {
+              console.log('Location obtained via navigator.geolocation')
+              resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
+            },
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 10000 }
+          )
+        })
+      }
+    } catch (e) {
+      console.warn('navigator.geolocation unavailable', e)
+    }
+
+    console.warn('getDeviceLocation: all providers exhausted, no location obtained')
+    return null
+  }
+
   const handleSubmit = async () => {
     // Build a simple request based on first condition (keep it minimal)
     if (!coords) {
@@ -77,7 +202,6 @@ export default function ConsultaScreen() {
 
     setLoading(true)
     try {
-      const targetDate = new Date().toISOString().split('T')[0]
       const req = createWeatherForecastRequest({ latitude: coords!.lat, longitude: coords!.lon }, targetDate, {})
       const apiResp = await PostWeatherForecast(req)
       setResult(apiResp)
@@ -146,22 +270,31 @@ export default function ConsultaScreen() {
 
           <View style={styles.colSmall}>
             <Text style={styles.label}>📅 Fecha objetivo</Text>
-            <TextInput style={styles.input} value={new Date().toISOString().split('T')[0]} editable={false} />
+            <TextInput 
+              style={styles.input} 
+              value={targetDate} 
+              onChangeText={setTargetDate}
+              placeholder="YYYY-MM-DD"
+            />
           </View>
         </View>
 
         <View style={styles.actionsRow}>
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#10B981' }]} onPress={async () => {
-            // try to use geolocation if available
+            setLoading(true)
             try {
-              // eslint-disable-next-line @typescript-eslint/no-var-requires
-              const { getCurrentPosition } = require('@react-native-community/geolocation')
-              getCurrentPosition((pos: any) => {
-                const { latitude, longitude } = pos.coords
-                setCoords({ lat: latitude, lon: longitude })
-              }, (err: any) => console.warn('geo err', err))
+              const pos = await getDeviceLocation()
+              if (pos) {
+                setCoords({ lat: pos.latitude, lon: pos.longitude })
+                Alert.alert('Ubicación obtenida', `Lat: ${pos.latitude.toFixed(4)}, Lon: ${pos.longitude.toFixed(4)}`)
+              } else {
+                Alert.alert('Ubicación no disponible', 'No fue posible obtener tu ubicación. Revisa permisos y configuración del dispositivo.')
+              }
             } catch (e) {
-              console.warn('Geolocation not available', e)
+              console.warn('Geolocation error', e)
+              Alert.alert('Error', 'No fue posible obtener la ubicación')
+            } finally {
+              setLoading(false)
             }
           }}>
             <Text style={styles.actionText}>📍 Mi ubicación</Text>
@@ -263,35 +396,23 @@ export default function ConsultaScreen() {
         <View style={styles.resultOuterCard}>
           <View style={styles.resultHeaderRow}>
             <Text style={styles.resultHeaderTitle}>🔎 Análisis</Text>
-            <TouchableOpacity style={styles.resultHeaderButton} onPress={() => { /* open details */ }}>
+            <TouchableOpacity style={styles.resultHeaderButton} onPress={() => {
+              try {
+                // Navigate to Peticiones using Expo Router
+                router.push({
+                  pathname: '/peticiones',
+                  params: { result: JSON.stringify(result) }
+                })
+              } catch (e) {
+                console.warn('Navigation to Peticiones failed', e)
+                Alert.alert('Error', 'No se pudo navegar a Peticiones')
+              }
+            }}>
               <Text style={{ color: '#fff', fontWeight: '700' }}>📊 Detalles</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.intensityBtn} onPress={() => setShowMap(prev => !prev)}>
-            <Text style={{ color: '#fff', fontWeight: '800' }}>{showMap ? '🗺 Ocultar mapa' : '🔥 Ver Mapa de Intensidad'}</Text>
-          </TouchableOpacity>
-
-          {showMap && (
-            <View style={[styles.mapWrap, { marginTop: 12 }]}> 
-              {loading ? (
-                <View style={styles.mapLoading}><ActivityIndicator size="large" color="#0B3D91" /></View>
-              ) : MapView && mapRegion ? (
-                // @ts-ignore
-                <MapView style={styles.map} region={mapRegion} provider={PROVIDER_GOOGLE}>
-                  {Marker && coords ? <Marker coordinate={{ latitude: coords.lat, longitude: coords.lon }} /> : null}
-                </MapView>
-              ) : WebView && coords ? (
-                <WebView originWhitelist={["*"]} style={styles.map} source={{ html: `<!doctype html><html><head><meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0" /><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /><style>html,body,#map{height:100%;margin:0;padding:0}</style></head><body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>const map = L.map('map').setView([${coords?.lat ?? 31.8659}, ${coords?.lon ?? -116.6030}], 10);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);L.marker([${coords?.lat ?? 31.8659}, ${coords?.lon ?? -116.6030}]).addTo(map);</script></body></html>` }} javaScriptEnabled domStorageEnabled startInLoadingState />
-              ) : (
-                <View style={styles.mapPlaceholder}>
-                  <Text style={styles.mapPlaceholderTitle}>Mapa no disponible</Text>
-                  <Text style={styles.mapPlaceholderText}>El módulo react-native-maps no está instalado o no está disponible en Expo Go. Usa Expo dev client para mapas nativos o instala la dependencia.</Text>
-                </View>
-              )}
-            </View>
-          )}
-
+        
           <View style={styles.metaRow}>
             <Text style={styles.small}>📍 {result.cityName ?? `${result.query_info?.location?.latitude ?? 'N/A'}, ${result.query_info?.location?.longitude ?? 'N/A'}`}</Text>
             <Text style={styles.small}>{result.query_info?.target_date ?? ''}</Text>

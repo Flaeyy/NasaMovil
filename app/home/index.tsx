@@ -69,7 +69,7 @@ export default function Home() {
   const team = [
     { name: 'Eduardo Castro', photo: null },
     { name: 'Felix Dolores', photo: null },
-    { name: 'Wendolyne Lambur', photo: null },
+    { name: 'Wendoline Lambur', photo: null },
     { name: 'Fernanda Merino', photo: null },
     { name: 'Fernanda Medrano', photo: null },
     { name: 'Gerardo Yepez', photo: null }

@@ -2,14 +2,21 @@
 import type { WeatherForecastRequest } from '../interfaces/out/Iout'
 import type { WeatherForecastAPIResponse } from '../interfaces/in/Iresponse.API'
 
-// Usar rutas relativas para aprovechar el proxy de Vite
-const URL_API_NASA = `/api/v1/weather`
+import { API_NASA_WEATHER } from '../config'
+
+// Use the centralized config for the API base so it's easy to change.
+const URL_API_NASA = API_NASA_WEATHER
 
 export { URL_API_NASA }
 
 export const GetStatus = async () => {
   try {
-    const res = await fetch(`${URL_API_NASA}/status`)
+    const start = Date.now()
+    const statusUrl = `${URL_API_NASA}/status`
+    console.log('📡 Probing NASA API status at', statusUrl)
+    const res = await fetch(statusUrl)
+    const elapsed = Date.now() - start
+    console.log(`📶 Probe finished in ${elapsed}ms - ok=${res.ok} status=${res.status}`)
 
     const contentType = res.headers.get('content-type') || ''
 
@@ -45,24 +52,79 @@ export const GetStatus = async () => {
     // Not JSON and not HTML (or HTML didn't start with '<'), return the body text for inspection
     return { ok: res.ok, status: res.status, data: null, bodyText: text }
   } catch (error) {
-    console.error('Error fetching NASA status:', error)
-    return { ok: false, status: null, data: null, error: String(error) }
+    // Provide more diagnostics to help debug "Network request failed"
+    try {
+      console.error('Error fetching NASA status:', error)
+      const probeResults: any = {}
+      // Try hitting base API root and /docs to check tunnel availability
+      // These are best-effort probes and won't throw the original error away.
+      const probes = [
+        { name: 'API_BASE', url: (URL_API_NASA || '').replace(/\/api\/v1\/weather$/, '') },
+        { name: 'API_DOCS', url: (URL_API_NASA || '').replace(/\/weather$/, '') + '/docs' }
+      ]
+      for (const p of probes) {
+        try {
+          const t0 = Date.now()
+          const r = await fetch(p.url)
+          const t1 = Date.now()
+          probeResults[p.name] = { ok: r.ok, status: r.status, timeMs: t1 - t0 }
+        } catch (pe) {
+          probeResults[p.name] = { error: String(pe) }
+        }
+      }
+
+      console.error('Network probes results:', probeResults)
+      return { ok: false, status: null, data: null, error: String(error), probes: probeResults }
+    } catch (finalErr) {
+      console.error('Error during diagnostic probes:', finalErr)
+      return { ok: false, status: null, data: null, error: String(error) }
+    }
   }
 }
 
 export const PostWeatherForecast = async (data: WeatherForecastRequest): Promise<WeatherForecastAPIResponse> => {
   try {
-    const res = await fetch(`${URL_API_NASA}/probability`, {
+    const url = `${URL_API_NASA}/probability`
+    console.log('➡️ Posting forecast to', url)
+    console.log('➡️ Request payload:', JSON.stringify(data).substring(0, 2000))
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const json = await res.json()
-    console.log('Weather forecast posted successfully:', json)
-    return json
+
+    const contentType = res.headers.get('content-type') || ''
+    // Read body once and reuse it to avoid "Already read" errors
+    let bodyText = ''
+    try {
+      bodyText = await res.text()
+    } catch (readErr) {
+      bodyText = `<<unreadable body: ${String(readErr)}>>`
+    }
+
+    let parsedBody: any = null
+    if (contentType.includes('application/json')) {
+      try {
+        parsedBody = bodyText ? JSON.parse(bodyText) : null
+      } catch (parseErr) {
+        parsedBody = `<<invalid json: ${String(parseErr)}>>`
+      }
+    }
+
+    if (!res.ok) {
+      console.error('❌ Server returned error for POST /probability:', { status: res.status, body: bodyText })
+      const err: any = new Error(`HTTP ${res.status}`)
+      err.status = res.status
+      err.body = bodyText
+      throw err
+    }
+
+    const json = contentType.includes('application/json') ? parsedBody : (bodyText ? bodyText : {})
+    console.log('✅ Weather forecast posted successfully:', json)
+    return json as WeatherForecastAPIResponse
   } catch (error) {
     console.error('Error posting weather forecast:', error)
+    // Re-throw after logging so callers receive the richer error
     throw error
   }
 }
