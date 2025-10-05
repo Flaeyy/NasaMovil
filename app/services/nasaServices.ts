@@ -98,55 +98,80 @@ export const createWeatherForecastRequest = (
 const API_KEY = "68e1400920d9f427368340cfjf457e4";
 
 export async function getCoordinates(address: string): Promise<{ lat: number; lon: number } | null> {
-  try {
-    const url = `https://geocode.maps.co/search?q=${encodeURIComponent(address)}&api_key=${API_KEY}`
-    
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Error en la API');
-    
-    const data = await response.json();
-    
-    if (data && data.length > 0) {
-      const result = {
-        lat: parseFloat(data[0].lat),
-        lon: parseFloat(data[0].lon),
-      };
-      return result;
+  // Try a list of public geocoders until one returns a usable result.
+  const providers = [
+    // geocode.maps.co (lightweight OpenStreetMap-based service)
+    async (q: string) => {
+      const url = `https://geocode.maps.co/search?q=${encodeURIComponent(q)}`
+      const res = await fetch(url)
+      if (!res.ok) return null
+      const data = await res.json()
+      if (Array.isArray(data) && data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
+      return null
+    },
+    // Nominatim (OpenStreetMap) as a fallback
+    async (q: string) => {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`
+      const res = await fetch(url, { headers: { 'User-Agent': 'rn-movil/1.0 (+https://example.com)' } })
+      if (!res.ok) return null
+      const data = await res.json()
+      if (Array.isArray(data) && data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) }
+      return null
     }
-    return null;
-  } catch (error) {
-    console.error('Error obteniendo coordenadas:', error);
-    return null;
+  ]
+
+  for (const fn of providers) {
+    try {
+      const out = await fn(address)
+      if (out) return out
+    } catch (err) {
+      // continue to next provider
+      console.warn('Geocoder provider failed:', err)
+    }
   }
+
+  console.warn('getCoordinates: no geocoder returned results for:', address)
+  return null
 }
 
 export async function getLocationName(lat: number, lon: number): Promise<string | null> {
+  // Try reverse geocoding with a couple of free services.
   try {
-    const url = `https://geocode.maps.co/reverse?lat=${lat}&lon=${lon}&api_key=${API_KEY}`
-    
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('Error en la API de geocodificación inversa');
-    
-    const data = await response.json();
-    
-    if (data && data.address) {
-      const locationName = 
-        data.address.city || 
-        data.address.town || 
-        data.address.village || 
-        data.address.municipality ||
-        data.address.county ||
-        data.address.state ||
-        data.display_name?.split(',')[0] ||
-        `${lat.toFixed(4)}, ${lon.toFixed(4)}`
-      
-      const region = data.address.state || data.address.country
-      return region ? `${locationName}, ${region}` : locationName
+    // First: geocode.maps.co
+    try {
+      const url = `https://geocode.maps.co/reverse?lat=${lat}&lon=${lon}`
+      const res = await fetch(url)
+      if (res.ok) {
+        const data = await res.json()
+        if (data && data.address) {
+          const locationName = data.address.city || data.address.town || data.address.village || data.address.county || data.address.state || data.display_name?.split(',')[0] || `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+          const region = data.address.state || data.address.country
+          return region ? `${locationName}, ${region}` : locationName
+        }
+      }
+    } catch (e) {
+      console.warn('reverse geocode (maps.co) failed', e)
     }
-    
+
+    // Fallback: Nominatim
+    try {
+      const url2 = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
+      const res2 = await fetch(url2, { headers: { 'User-Agent': 'rn-movil/1.0 (+https://example.com)' } })
+      if (res2.ok) {
+        const d2 = await res2.json()
+        if (d2 && d2.address) {
+          const locationName = d2.address.city || d2.address.town || d2.address.village || d2.address.county || d2.address.state || d2.display_name?.split(',')[0] || `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+          const region = d2.address.state || d2.address.country
+          return region ? `${locationName}, ${region}` : locationName
+        }
+      }
+    } catch (e) {
+      console.warn('reverse geocode (nominatim) failed', e)
+    }
+
     return `${lat.toFixed(4)}, ${lon.toFixed(4)}`
   } catch (error) {
-    console.error('Error obteniendo nombre de ubicación:', error);
+    console.error('Error obteniendo nombre de ubicación:', error)
     return `${lat.toFixed(4)}, ${lon.toFixed(4)}`
   }
 }

@@ -10,6 +10,9 @@ const NASA = require('../../assets/image2.jpg');
 export default function Home() {
   const router = useRouter();
 
+  // Accent palette used for methodology cards
+  const accentColors = ['#8b5cf6', '#10b981', '#f97316', '#0ea5a9', '#f97316', '#7c3aed'];
+
   const onStart = useCallback(() => {
     router.push('/consulta');
   }, [router]);
@@ -109,7 +112,7 @@ export default function Home() {
 
         <View style={styles.cardsWrap}>
           {methodology.map((m, i) => (
-            <View key={i} style={styles.cardSmall}>
+            <View key={i} style={[styles.cardSmall, { borderLeftColor: accentColors[i % accentColors.length] }] }>
               <Text style={styles.cardEmoji}>{m.emoji}</Text>
               <Text style={styles.cardSmallTitle}>{m.title}</Text>
               <Text style={styles.cardSmallBody}>{m.body}</Text>
@@ -166,28 +169,36 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1 },
   hero: { width: '100%', height: 280, justifyContent: 'center' },
   heroOverlay: {
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(74, 51, 113, 0.92)',
     marginHorizontal: 16,
     padding: 18,
-    borderRadius: 10,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
-  heroTitle: { fontSize: 26, fontWeight: '800', marginBottom: 8, color: '#0B3D91' },
-  heroText: { fontSize: 14, color: '#0f172a', lineHeight: 20 },
+  heroTitle: { fontSize: 26, fontWeight: '900', marginBottom: 8, color: '#fff' },
+  heroText: { fontSize: 14, color: 'rgba(255,255,255,0.95)', lineHeight: 20 },
   heroBtn: {
     marginTop: 12,
-    backgroundColor: '#0B856E',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+    backgroundColor: '#ff6a00',
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 12,
     alignSelf: 'flex-start',
+    shadowColor: '#ff6a00',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 }
   },
-  heroBtnText: { color: '#fff', fontWeight: '700' },
+  heroBtnText: { color: '#fff', fontWeight: '800' },
 
   container: { maxWidth: 900, alignSelf: 'center', width: '100%', padding: 16 },
   featureCard: {
     marginTop: 16,
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
     padding: 12,
     flexDirection: 'row',
     gap: 12,
@@ -197,22 +208,22 @@ const styles = StyleSheet.create({
       android: { elevation: 2 },
     }),
   },
-  featureImage: { width: 120, height: 120, borderRadius: 10 },
+  featureImage: { width: 96, height: 96, borderRadius: 10 },
   featureText: { flex: 1, paddingLeft: 6 },
-  featureTitle: { fontSize: 18, fontWeight: '700', color: '#0B3D91', marginBottom: 6 },
-  featureBody: { fontSize: 14, color: '#334155', lineHeight: 20 },
+  featureTitle: { fontSize: 16, fontWeight: '800', color: '#5b21b6', marginBottom: 6 },
+  featureBody: { fontSize: 14, color: '#374151', lineHeight: 20 },
 
   sectionTitle: { fontSize: 20, fontWeight: '800', color: '#0B3D91', marginTop: 20, textAlign: 'center' },
   sectionIntro: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginTop: 8, marginBottom: 12 },
 
   cardsWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
   cardSmall: {
-    width: '48%',
+    width: '100%',
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 12,
+    padding: 14,
     marginBottom: 12,
-    borderWidth: 1,
+    borderLeftWidth: 6,
     borderColor: '#e6eef9',
   },
   cardEmoji: { fontSize: 28, marginBottom: 8 },
@@ -220,15 +231,15 @@ const styles = StyleSheet.create({
   cardSmallBody: { fontSize: 13, color: '#374151' },
 
   teamWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 12 },
-  teamMember: { width: '48%', alignItems: 'center', marginBottom: 12, backgroundColor: '#fff', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#eef2ff' },
+  teamMember: { width: '48%', alignItems: 'center', marginBottom: 12, backgroundColor: '#fff', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9' },
   avatar: { width: 64, height: 64, borderRadius: 32, marginBottom: 8 },
   avatarPlaceholder: { width: 64, height: 64, borderRadius: 32, marginBottom: 8, backgroundColor: '#60a5fa', alignItems: 'center', justifyContent: 'center' },
   avatarInitials: { color: '#fff', fontWeight: '700' },
   memberName: { fontWeight: '700', color: '#0f172a' },
   memberRole: { fontSize: 12, color: '#6b7280' },
 
-  footer: { marginTop: 20, padding: 12, backgroundColor: '#f1fdf7', borderRadius: 10 },
-  footerTitle: { fontSize: 16, fontWeight: '800', color: '#0B3D91', marginBottom: 6 },
+  footer: { marginTop: 20, padding: 12, backgroundColor: '#ffffff', borderRadius: 12 },
+  footerTitle: { fontSize: 16, fontWeight: '800', color: '#5b21b6', marginBottom: 6 },
   footerText: { fontSize: 13, color: '#475569', marginBottom: 8 },
   copy: { fontSize: 12, color: '#6b7280', textAlign: 'center' }
   ,

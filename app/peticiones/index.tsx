@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, Platform } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useNavigation } from '@react-navigation/native'
 import { useWeatherResults } from '../_contexts/WeatherResultsContext'
@@ -34,12 +34,16 @@ export default function PeticionesScreen() {
 
           {results.length > 0 && (
             <>
-              <TouchableOpacity onPress={() => { window.dispatchEvent(new CustomEvent('expandAllCards')) }} style={[styles.actionBtn, styles.greenBtn]}>
-                <Text style={styles.actionBtnText}>📂</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => { window.dispatchEvent(new CustomEvent('minimizeAllCards')) }} style={[styles.actionBtn, styles.purpleBtn]}>
-                <Text style={styles.actionBtnText}>📁</Text>
-              </TouchableOpacity>
+              {Platform.OS === 'web' && (
+                <>
+                  <TouchableOpacity onPress={() => { try { (globalThis as any).dispatchEvent(new CustomEvent('expandAllCards')) } catch {} }} style={[styles.actionBtn, styles.greenBtn]}>
+                    <Text style={styles.actionBtnText}>📂</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => { try { (globalThis as any).dispatchEvent(new CustomEvent('minimizeAllCards')) } catch {} }} style={[styles.actionBtn, styles.purpleBtn]}>
+                    <Text style={styles.actionBtnText}>📁</Text>
+                  </TouchableOpacity>
+                </>
+              )}
               <TouchableOpacity onPress={clearAllResults} style={[styles.actionBtn, styles.redBtn]}>
                 <Text style={styles.actionBtnText}>🗑️</Text>
               </TouchableOpacity>
@@ -54,7 +58,7 @@ export default function PeticionesScreen() {
               return (
                 <View key={`${r.metadata.analysis_completed_at}-${idx}`} style={[{ backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, elevation: 2 }, styles.resultCardContainer]}>
                   <Text style={{ fontWeight: '800', color: '#0B3D91' }}>{r.customName || (r.startDate ? `Predicción ${r.startDate}` : `Análisis #${idx+1}`)}</Text>
-                  <Text style={{ color: '#374151', marginTop: 6 }}>{r.cityName || `${r.query_info.location.latitude}, ${r.query_info.location.longitude}`}</Text>
+                  <Text style={{ color: '#374151', marginTop: 6 }}>{r.cityName || `${r.query_info?.location?.latitude ?? 'N/A'}, ${r.query_info?.location?.longitude ?? 'N/A'}`}</Text>
                   <Text style={{ color: '#919191', marginTop: 6 }}>{r.query_info?.target_date ?? 'N/A'}</Text>
                   <View style={{ marginTop: 8, flexDirection: 'row' }}>
                     <TouchableOpacity style={{ backgroundColor: '#10B981', padding: 8, borderRadius: 8, marginRight: 8 }} onPress={() => { /* open map modal */ }}>

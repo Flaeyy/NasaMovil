@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform } from 'react-native'
+import { View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform, Alert } from 'react-native'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { useWeatherResults } from '../_contexts/WeatherResultsContext'
 import { getCoordinates, getLocationName, PostWeatherForecast, createWeatherForecastRequest, exportToCSV, exportToJSON } from '../services/nasaServices'
@@ -56,8 +56,13 @@ export default function ConsultaScreen() {
     try {
       const c = await getCoordinates(destino)
       if (c) setCoords(c)
+      else {
+        // Inform the user instead of silently failing
+        Alert.alert('No se encontraron coordenadas', 'No pudimos encontrar la ubicación solicitada. Intenta con otra dirección o verifica tu conexión a internet.')
+      }
     } catch (e) {
       console.warn('Error buscando coordenadas', e)
+      Alert.alert('Error', 'Ocurrió un error al buscar la ubicación. Revisa tu conexión e inténtalo de nuevo.')
     } finally {
       setLoading(false)
     }
